@@ -1,0 +1,1 @@
+### Going through [The Discovery Book](https://docs.rust-embedded.org/discovery)

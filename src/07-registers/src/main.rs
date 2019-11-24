@@ -8,26 +8,19 @@ use aux7::{entry, iprint, iprintln};
 
 #[entry]
 fn main() -> ! {
-    aux7::init();
+    let gpioe = aux7::init().1;
 
-    // Here we use volatile operations instead of plain reads/writes (explantion below main):
-    unsafe {
-        // A magical address!
-        const GPIOE_BSRR: u32 = 0x48001018;
+    // Turn on the North LED
+    gpioe.bsrr.write(|w| w.bs9().set_bit());
 
-        // Turn on the "North" LED (red)
-        ptr::write_volatile(GPIOE_BSRR as *mut u32, 1 << 9);
+    // Turn on the East LED
+    gpioe.bsrr.write(|w| w.bs11().set_bit());
 
-        // Turn on the "East" LED (green)
-        ptr::write_volatile(GPIOE_BSRR as *mut u32, 1 << 11);
+    // Turn off the North LED
+    gpioe.bsrr.write(|w| w.bs9().set_bit());
 
-        // Turn off the "North" LED
-        ptr::write_volatile(GPIOE_BSRR as *mut u32, 1 << (9 + 16));
-
-        // Turn off the "East" LED
-        ptr::write_volatile(GPIOE_BSRR as *mut u32, 1 << (11 + 16));
-    }
-
+    // Turn off the East LED
+    gpioe.bsrr.write(|w| w.bs11().set_bit());
 
     loop {}
 }
@@ -51,4 +44,23 @@ fn main() -> ! {
 
 //     // Turn off the "East" LED
 //     *(GPIOE_BSRR as *mut u32) = 1 << (11 + 16);
+// }
+
+// Here was an update to the original code using volatile operations instead of plain
+// reads/writes like above which will solve the the misoptimization problem:
+// unsafe {
+//     // A magical address!
+//     const GPIOE_BSRR: u32 = 0x48001018;
+
+//     // Turn on the "North" LED (red)
+//     ptr::write_volatile(GPIOE_BSRR as *mut u32, 1 << 9);
+
+//     // Turn on the "East" LED (green)
+//     ptr::write_volatile(GPIOE_BSRR as *mut u32, 1 << 11);
+
+//     // Turn off the "North" LED
+//     ptr::write_volatile(GPIOE_BSRR as *mut u32, 1 << (9 + 16));
+
+//     // Turn off the "East" LED
+//     ptr::write_volatile(GPIOE_BSRR as *mut u32, 1 << (11 + 16));
 // }

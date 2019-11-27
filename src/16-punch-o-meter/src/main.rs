@@ -4,24 +4,57 @@
 
 #[allow(unused_imports)]
 use aux16::{entry, iprint, iprintln, prelude::*, I16x3, Sensitivity};
+use m::Float;
 
+// The accelerometer is also built inside the LSM303DLHC package. And just
+// like the magnetometer, it can also be accessed using the I2C bus. It
+// also has the same coordinate system as the magnetometer
+
+// Note again this is the maintainer's solution
 #[entry]
 fn main() -> ! {
-    let (mut lsm303dlhc, mut delay, _mono_timer, mut itm) = aux16::init();
+    const SENSITIVITY: f32 = 12. / (1 << 14) as f32;
+    const THRESHOLD: f32 = 0.5;
 
-    // extend sensing range to `[-12g, +12g]`
+    let (mut lsm303dlhc, mut delay, mono_timer, mut itm) = aux16::init();
+
     lsm303dlhc.set_accel_sensitivity(Sensitivity::G12).unwrap();
+
+    let measurement_time = mono_timer.frequency().0; // 1 second in ticks
+    let mut instant = None;
+    let mut max_g = 0.;
+
     loop {
-        const SENSITIVITY: f32 = 12. / (1 << 14) as f32;
+        let g_x = f32::from(lsm303dlhc.accel().unwrap().x).abs() * SENSITIVITY;
 
-        let I16x3 { x, y, z } = lsm303dlhc.accel().unwrap();
+        match instant {
+            None => {
+                // If acceleration goes above a threshold, we start measuring
+                if g_x > THRESHOLD {
+                    iprintln!(&mut itm.stim[0], "START!");
 
-        let x = f32::from(x) * SENSITIVITY;
-        let y = f32::from(y) * SENSITIVITY;
-        let z = f32::from(z) * SENSITIVITY;
+                    max_g = g_x;
+                    instant = Some(mono_timer.now());
+                }
+            }
+            // Still measuring
+            Some(ref instant) if instant.elapsed() < measurement_time => {
+                if g_x > max_g {
+                    max_g = g_x;
+                }
+            }
+            _ => {
+                // Report max value
+                iprintln!(&mut itm.stim[0], "Max acceleration: {}g", max_g);
 
-        iprintln!(&mut itm.stim[0], "{:?}", (x, y, z));
+                // Measurement finished
+                instant = None;
 
-        delay.delay_ms(1_000_u16);
+                // Reset
+                max_g = 0.;
+            }
+        }
+
+        delay.delay_ms(50_u8);
     }
 }
